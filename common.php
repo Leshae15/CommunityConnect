@@ -247,6 +247,25 @@ function pageBottom()
     </html>
     <?php
 }
+//Davanea Morsby- Datatbase connection function
+function dbConnect(){
+            $config = require __DIR__ . '/dbConfig.php';
+
+            // Return false instead of stopping the page with a fatal error.
+            mysqli_report(MYSQLI_REPORT_OFF);
+            $connection = @mysqli_connect(
+                $config['host'],
+                $config['username'],
+                $config['password'],
+                $config['database']
+            );
+
+            if ($connection === false) {
+                return false;
+            } 
+            mysqli_set_charset($connection, 'utf8mb4');
+            return $connection;
+}
 
 function saveRegistration($record)
 {
@@ -302,86 +321,62 @@ function saveRegistration($record)
         }
     }
 
-    $handle = @fopen(
-        __DIR__ . '/registrations_extended.csv',
-        'c+'
+    //Davanea Morsby- Connect to the database and save the record.
+    $connection = dbConnect();
+
+    if ($connection === false) {
+        return false;
+    }
+
+    $statement = mysqli_prepare(
+        $connection,
+        'INSERT INTO registrations '
+        . '(id, saved_at, full_name, email, telephone, age, parish, activity, '
+        . 'participation_date, skills, contact_method, volunteer_experience, availability) '
+        . 'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
 
-    if ($handle === false) {
+    // The statement fails to prepare if the registrations table is missing.
+    if ($statement === false) {
+        mysqli_close($connection);
         return false;
     }
 
-    if (!flock($handle, LOCK_EX)) {
-        fclose($handle);
-        return false;
-    }
+    $savedAt = date('Y-m-d H:i:s', strtotime($record['saved_at'] ));
+    $age = (int) $record['age'];
+    $skillsList = implode(',', $record['skills']);
 
-    rewind($handle);
+    //Optional fields left blank if not provided.
+    $contactMethod = ($record['contact_method'] ?? '') ?: '';
+    $experience = ($record['volunteer_experience'] ?? '') ?: '';
+    $availability = ($record['availability'] ?? '') ?: '';
 
-    $header = fgetcsv($handle, 0, ',', '"', '');
+    mysqli_stmt_bind_param(
+        $statement, 
+        "sssssisssssss",
+        $record['id'],
+        $savedAt,
+        $record['full_name'],
+        $record['email'],
+        $record['telephone'],
+        $age,
+        $record['parish'],
+        $record['activity'],
+        $record['participation_date'],
+        $skillsList,
+        $contactMethod,
+        $experience,
+        $availability   
+    );
 
-    if ($header !== false && $header !== $columns) {
-        flock($handle, LOCK_UN);
-        fclose($handle);
-        return false;
-    }
+    $success = mysqli_stmt_execute($statement);
 
-    // Prevent duplicate saves of the same registration.
-    while (
-        ($existing = fgetcsv($handle, 0, ',', '"', '')) !== false
-    ) {
-        if (($existing[0] ?? '') === $record['id']) {
-            flock($handle, LOCK_UN);
-            fclose($handle);
-            return true;
+    //ERROR 1062 MEANS THIS REGISTRATION ID WAS ALREADY SAVED, SO WE RETURN TRUE.
+    if (!$success && mysqli_stmt_errno($statement) === 1062) {
+        $success = true;
         }
+        
+        mysqli_stmt_close($statement);
+        mysqli_close($connection);
+        return $success;
     }
-
-    fseek($handle, 0, SEEK_END);
-
-    $success = true;
-
-    if ($header === false) {
-        $success = fputcsv(
-            $handle,
-            $columns,
-            ',',
-            '"',
-            ''
-        ) !== false;
-    }
-
-    $row = [];
-
-    foreach ($columns as $column) {
-        $value = $column === 'skills'
-            ? implode('; ', $record[$column] ?? [])
-            : (string) ($record[$column] ?? '');
-
-        // Prevent spreadsheet formula interpretation.
-        if (preg_match('/^[=+@\-\t\r\n]/', $value)) {
-            $value = "'" . $value;
-        }
-
-        $row[] = $value;
-    }
-
-    if ($success) {
-        $success = fputcsv(
-            $handle,
-            $row,
-            ',',
-            '"',
-            ''
-        ) !== false;
-    }
-
-    if ($success) {
-        $success = fflush($handle);
-    }
-
-    flock($handle, LOCK_UN);
-    fclose($handle);
-
-    return $success;
-}
