@@ -1,3 +1,4 @@
+
 <?php
 require __DIR__ . '/common.php';
 
@@ -18,10 +19,8 @@ $reportFields = [
     'skills' => 'Skills'
 ];
 
-// Include existing records and registrations with the new fields.
 $files = [
-    __DIR__ . '/registrations.csv',
-    __DIR__ . '/registrations_extended.csv'
+    __DIR__ . '/registration.csv',
 ];
 
 $requiredColumns = [
@@ -56,13 +55,19 @@ foreach ($files as $path) {
 
     if (!flock($handle, LOCK_SH)) {
         fclose($handle);
-
         $messages[] = 'One registration file is busy. Please try again.';
         continue;
     }
 
-    // Read each file's own column headings.
+    // Read and clean the column headings.
     $header = fgetcsv($handle, 0, ',', '"', '');
+
+    if (is_array($header)) {
+        $header = array_map(function ($column) {
+            $column = preg_replace('/^\xEF\xBB\xBF/', '', (string) $column);
+            return trim($column);
+        }, $header);
+    }
 
     $validHeader = is_array($header)
         && count(array_diff($requiredColumns, $header)) === 0
@@ -71,9 +76,8 @@ foreach ($files as $path) {
     if (!$validHeader) {
         $messages[] = 'One registration file has an unexpected header.';
     } else {
-        while (
-            ($row = fgetcsv($handle, 0, ',', '"', '')) !== false
-        ) {
+        while (($row = fgetcsv($handle, 0, ',', '"', '')) !== false) {
+
             // Ignore blank lines.
             if ($row === [null]) {
                 continue;
@@ -91,7 +95,6 @@ foreach ($files as $path) {
                 continue;
             }
 
-            // If an ID appears in both files, use the extended record.
             $records[$record['id']] = $record;
         }
     }
@@ -170,7 +173,7 @@ pageTop('Administrator Registration Report');
 </p>
 
 <p class="hint">
-    Older registrations may show “Not specified” for fields
+    Older registrations may show "Not specified" for fields
     that were added later.
 </p>
 

@@ -1,3 +1,4 @@
+
 <?php
 session_start();
 
@@ -248,6 +249,7 @@ function pageBottom()
     <?php
 }
 
+// Save registration details to registration.csv.
 function saveRegistration($record)
 {
     global $columns, $activities, $skills;
@@ -270,21 +272,21 @@ function saveRegistration($record)
             || !is_scalar($record[$field])
             || trim((string) $record[$field]) === ''
         ) {
+            error_log('CommunityConnect: Missing or invalid field: ' . $field);
             return false;
         }
     }
 
     if (!in_array($record['activity'], $activities, true)) {
+        error_log('CommunityConnect: Invalid activity.');
         return false;
     }
 
-    // Validate the activity/date combination again before saving.
-    if (
-        !validActivityDate(
-            $record['activity'],
-            $record['participation_date']
-        )
-    ) {
+    if (!validActivityDate(
+        $record['activity'],
+        $record['participation_date']
+    )) {
+        error_log('CommunityConnect: Invalid activity date.');
         return false;
     }
 
@@ -293,25 +295,28 @@ function saveRegistration($record)
         || !is_array($record['skills'])
         || empty($record['skills'])
     ) {
+        error_log('CommunityConnect: Invalid skills.');
         return false;
     }
 
     foreach ($record['skills'] as $skill) {
         if (!is_string($skill) || !in_array($skill, $skills, true)) {
+            error_log('CommunityConnect: Invalid skill.');
             return false;
         }
     }
 
-    $handle = @fopen(
-        __DIR__ . '/registrations_extended.csv',
-        'c+'
-    );
+    $file = __DIR__ . '/registration.csv';
+
+    $handle = @fopen($file, 'c+');
 
     if ($handle === false) {
+        error_log('CommunityConnect: Cannot open registration.csv for writing.');
         return false;
     }
 
     if (!flock($handle, LOCK_EX)) {
+        error_log('CommunityConnect: Could not lock CSV file.');
         fclose($handle);
         return false;
     }
@@ -320,16 +325,22 @@ function saveRegistration($record)
 
     $header = fgetcsv($handle, 0, ',', '"', '');
 
-    if ($header !== false && $header !== $columns) {
-        flock($handle, LOCK_UN);
-        fclose($handle);
-        return false;
+    if ($header !== false) {
+        // Remove a possible UTF-8 BOM from the first column.
+        $header[0] = preg_replace('/^\xEF\xBB\xBF/', '', $header[0]);
+
+        $header = array_map('trim', $header);
+
+        if ($header !== $columns) {
+            error_log('CommunityConnect: CSV headers do not match.');
+            flock($handle, LOCK_UN);
+            fclose($handle);
+            return false;
+        }
     }
 
-    // Prevent duplicate saves of the same registration.
-    while (
-        ($existing = fgetcsv($handle, 0, ',', '"', '')) !== false
-    ) {
+    // Prevent duplicate registrations.
+    while (($existing = fgetcsv($handle, 0, ',', '"', '')) !== false) {
         if (($existing[0] ?? '') === $record['id']) {
             flock($handle, LOCK_UN);
             fclose($handle);
@@ -341,14 +352,9 @@ function saveRegistration($record)
 
     $success = true;
 
+    // Add CSV headings if the file is empty.
     if ($header === false) {
-        $success = fputcsv(
-            $handle,
-            $columns,
-            ',',
-            '"',
-            ''
-        ) !== false;
+        $success = fputcsv($handle, $columns, ',', '"', '') !== false;
     }
 
     $row = [];
@@ -367,17 +373,15 @@ function saveRegistration($record)
     }
 
     if ($success) {
-        $success = fputcsv(
-            $handle,
-            $row,
-            ',',
-            '"',
-            ''
-        ) !== false;
+        $success = fputcsv($handle, $row, ',', '"', '') !== false;
     }
 
     if ($success) {
         $success = fflush($handle);
+    }
+
+    if (!$success) {
+        error_log('CommunityConnect: Failed to write registration to CSV.');
     }
 
     flock($handle, LOCK_UN);
