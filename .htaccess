@@ -1,9 +1,0 @@
-Options -Indexes
-
-<FilesMatch "(?i)\.(csv|txt|bak|zip)$">
-    Require all denied
-</FilesMatch>
-
-<Files "admin_config.php">
-    Require all denied
-</Files>
