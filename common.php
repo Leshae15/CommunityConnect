@@ -1,3 +1,4 @@
+
 <?php
 session_start();
 
@@ -289,21 +290,21 @@ function saveRegistration($record)
             || !is_scalar($record[$field])
             || trim((string) $record[$field]) === ''
         ) {
+            error_log('CommunityConnect: Missing or invalid field: ' . $field);
             return false;
         }
     }
 
     if (!in_array($record['activity'], $activities, true)) {
+        error_log('CommunityConnect: Invalid activity.');
         return false;
     }
 
-    // Validate the activity/date combination again before saving.
-    if (
-        !validActivityDate(
-            $record['activity'],
-            $record['participation_date']
-        )
-    ) {
+    if (!validActivityDate(
+        $record['activity'],
+        $record['participation_date']
+    )) {
+        error_log('CommunityConnect: Invalid activity date.');
         return false;
     }
 
@@ -312,11 +313,13 @@ function saveRegistration($record)
         || !is_array($record['skills'])
         || empty($record['skills'])
     ) {
+        error_log('CommunityConnect: Invalid skills.');
         return false;
     }
 
     foreach ($record['skills'] as $skill) {
         if (!is_string($skill) || !in_array($skill, $skills, true)) {
+            error_log('CommunityConnect: Invalid skill.');
             return false;
         }
     }

@@ -1,3 +1,4 @@
+
 <?php
 //Davanea Morsby- Datatbase connection function
 require __DIR__ . '/common.php';
