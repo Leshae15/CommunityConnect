@@ -201,7 +201,6 @@ function records_summary(mixed $records)
       $summary["volunteers_experience"]["Not Perfer"]++;
     } else {
       $summary["volunteers_experience"][$record["volunteer_experience"]] = 1;
-
     }
 
     if (isset($summary["availability"][$record["availability"]])) {
@@ -217,16 +216,15 @@ function records_summary(mixed $records)
     $month = $date->format("M");
 
     if (!isset($summary["date_registration"][$year])) {
-      $summary["date_registration"][$year] = [];
+      $summary["date_registration"][$year] = array_fill_keys(
+        ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+        0
+      );
     }
-    if (!isset($summary["date_registration"][$year][$month])) {
-      $summary["date_registration"][$year][$month] = 1;
-    } else {
-      $summary["date_registration"][$year][$month]++;
-    }
+    $summary["date_registration"][$year][$month]++;
   }
   foreach ($summary["date_registration"] as &$year_data) {
-    $year_data["total"] = array_sum($year_data);
+    $year_data["Total"] = array_sum($year_data);
   }
 
   return $summary;
@@ -352,7 +350,7 @@ $selected_id = rec_get('id');
 
 foreach ($page_rows as $record) {
   if ($record['id'] === $selected_id) {
-      $selected = $record;
+    $selected = $record;
   }
 }
 ?>
@@ -463,9 +461,9 @@ foreach ($page_rows as $record) {
           <canvas id="recordsChart"></canvas>
           <div id="chartDataSelectBtn">
             <button class="btn" id="prevChartData" onclick="prev_data()">Prev</button>
-            <button class="btn"  id="nextChartData" onclick="next_data()">Next</button>
+            <button class="btn" id="nextChartData" onclick="next_data()">Next</button>
           </div>
-         
+
         </section>
 
         <section class="card filters" aria-label="Filters">
@@ -707,7 +705,15 @@ foreach ($page_rows as $record) {
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
   const records_chart = document.getElementById('recordsChart');
-  const chart =  new Chart(records_chart, {
+  const bar_color = "#6C5C48";
+  const color_gradients = [
+    "#A79D91",
+    "#918576",
+    "#6C5C48",
+    "#564A3A",
+    "#41372B"
+  ]
+  const chart = new Chart(records_chart, {
     type: 'bar',
     data: {
       datasets: [{
@@ -717,8 +723,14 @@ foreach ($page_rows as $record) {
     },
     options: {
       scales: {
+        x: {
+          display: true
+        },
         y: {
-          beginAtZero: true
+          beginAtZero: true,
+          ticks: {
+            stepSize: 1
+          }
         }
       }
     }
@@ -727,79 +739,103 @@ foreach ($page_rows as $record) {
   const next_chart_data = document.getElementById("nextChartData");
   /** @type HTMLButtonElement*/
   const prev_chart_data = document.getElementById("prevChartData");
-  
+
   const summary_data = <?= json_encode(
-    records_summary($records)
-  ) ?>;
-  
+                          records_summary($records)
+                        ) ?>;
+
   const summary_data_keys = Object.keys(summary_data);
   let current_key = 0;
   switchChartData(summary_data_keys[current_key]);
   prev_data();
+  // prev_data();
 
-  
-  
-  function switchChartData(key){
+
+
+  function switchChartData(key) {
     const selected = summary_data[key];
-    
-    if(key==="date_registration"){
-      chart.data.datasets.splice(0,chart.data.datasets.length);
+    const is_doughnut = ["contact_methods", "volunteers_experience", "availability", "activities"].includes(key);
+    chart.config.type = is_doughnut ? "doughnut" : "bar";
+    chart.options.scales.x.display = !is_doughnut;
+    chart.options.scales.y.display = !is_doughnut;
+
+    if (key === "date_registration") {
+      chart.data.datasets.splice(0, chart.data.datasets.length);
       let months = new Set();
+      let color_gradient_count = 0;
       for (const year in selected) {
         const regist_for_year = selected[year];
-        for(const month of Object.keys(regist_for_year)){
+        for (const month of Object.keys(regist_for_year)) {
           months.add(month)
         }
         chart.data.datasets.push({
           label: year,
-          data: Object.values(regist_for_year)
+          data: Object.values(regist_for_year),
+          backgroundColor: color_gradients[color_gradient_count],
+          borderColor: bar_color
         });
+        color_gradient_count++;
+        if(color_gradient_count == color_gradients.length-1){
+          color_gradient_count = 0;
+        }
       }
       chart.data.labels = [...months];
       chart.options.plugins.title.display = true;
-      chart.options.plugins.title.text = toTitleCase(key).replace("_"," ");
+      chart.options.plugins.title.text = toTitleCase(key).replace("_", " ");
 
-    }else{
-      chart.data.labels = Object.keys(selected);
-      chart.data.datasets.splice(1,chart.data.datasets.length);
+    } else {
+      const labels = Object.keys(selected);
+      chart.data.labels = labels;
+      chart.data.datasets.splice(1, chart.data.datasets.length);
       chart.data.datasets[0].data = Object.values(selected);
-      chart.data.datasets[0].label = "Users' " + toTitleCase(key).replace("_"," ");
+      chart.data.datasets[0].label = "Users' " + toTitleCase(key).replace("_", " ");
+      if (is_doughnut) {
+        let labels_color = [];
+        for (let i = 0; i < labels.length; i++) {
+          labels_color.push(color_gradients[i]);
+          
+        }
+        chart.data.datasets[0].backgroundColor = labels_color
+        chart.data.datasets[0].borderColor = "#fffbf3";
+      } else {
+        chart.data.datasets[0].backgroundColor = bar_color;
+        chart.data.datasets[0].borderColor = bar_color;
+      }
       chart.options.plugins.title.display = true;
-      chart.options.plugins.title.text = toTitleCase(key).replace("_"," ");
+      chart.options.plugins.title.text = toTitleCase(key).replace("_", " ");
     }
     chart.update();
 
   }
 
-  function next_data(){
-    if (current_key == summary_data_keys.length-1) {
+  function next_data() {
+    if (current_key == summary_data_keys.length - 1) {
       current_key = 0;
-    } else{
-      current_key ++;
-    }              
+    } else {
+      current_key++;
+    }
     switchChartData(summary_data_keys[current_key]);
 
   }
 
-  function prev_data(){
-    if(current_key==0){
-      current_key = summary_data_keys.length-1;
-    }else{
-      current_key --;
+  function prev_data() {
+    if (current_key == 0) {
+      current_key = summary_data_keys.length - 1;
+    } else {
+      current_key--;
     }
     switchChartData(summary_data_keys[current_key]);
   }
   /**
- * @param {string} str
- * @returns {string}
- */
+   * @param {string} str
+   * @returns {string}
+   */
   function toTitleCase(str) {
     if (!str) return "";
     return str
       .toLowerCase()
       .replace(/\b\w/g, (char) => char.toUpperCase());
   }
-
 </script>
 
 <?php //Useful Fuction 
