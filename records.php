@@ -788,7 +788,7 @@ foreach ($page_rows as $record) {
       chart.data.labels = labels;
       chart.data.datasets.splice(1, chart.data.datasets.length);
       chart.data.datasets[0].data = Object.values(selected);
-      chart.data.datasets[0].label = "Users' " + toTitleCase(key).replace("_", " ");
+      chart.data.datasets[0].label = "Participants' " + toTitleCase(key).replace("_", " ");
       if (is_doughnut) {
         let labels_color = [];
         for (let i = 0; i < labels.length; i++) {
