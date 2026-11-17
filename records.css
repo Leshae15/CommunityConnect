@@ -727,3 +727,25 @@ button { cursor: pointer; }
   .skill-stack { flex-direction: row; flex-wrap: wrap; }
   .row-actions { justify-content: flex-start; gap: 14px; font-size: 14px; }
 }
+
+#recordsChart{
+  margin: 12px 14px;
+}
+
+#chartDataSelectBtn{
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: 0 auto;
+  padding-bottom: 14px;
+}
+
+#chartDataSelectBtn>button{
+  color: var(--ink-2);
+  background: var(--bg);
+  border: 1px solid var(--line);
+}
+
+#chartDataSelectBtn>button:hover {
+    border-color: var(--brown);
+}
